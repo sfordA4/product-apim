@@ -40,6 +40,8 @@ import org.wso2.am.integration.clients.admin.api.KeyManagerIndividualApi;
 import org.wso2.am.integration.clients.admin.api.LabelApi;
 import org.wso2.am.integration.clients.admin.api.LabelCollectionApi;
 import org.wso2.am.integration.clients.admin.api.SettingsApi;
+import org.wso2.am.integration.clients.admin.api.TenantConfigApi;
+import org.wso2.am.integration.clients.admin.api.TenantConfigSchemaApi;
 import org.wso2.am.integration.clients.admin.api.WorkflowCollectionApi;
 import org.wso2.am.integration.clients.admin.api.WorkflowsIndividualApi;
 
@@ -96,6 +98,8 @@ public class RestAPIAdminImpl {
     private LabelCollectionApi labelCollectionApi = new LabelCollectionApi();
     private EnvironmentApi environmentApi = new EnvironmentApi();
     private EnvironmentCollectionApi environmentCollectionApi = new EnvironmentCollectionApi();
+    private TenantConfigApi tenantConfigApi = new TenantConfigApi();
+    private TenantConfigSchemaApi tenantConfigSchemaApi = new TenantConfigSchemaApi();
     public static final String appName = "Integration_Test_App_Admin";
     public static final String callBackURL = "test.com";
     public static final String tokenScope = "Production";
@@ -173,6 +177,8 @@ public class RestAPIAdminImpl {
         workflowsIndividualApi.setApiClient(apiAdminClient);
         apiCategoryCollectionApi.setApiClient(apiAdminClient);
         apiCategoryIndividualApi.setApiClient(apiAdminClient);
+        tenantConfigApi.setApiClient(apiAdminClient);
+        tenantConfigSchemaApi.setApiClient(apiAdminClient);
         this.tenantDomain = tenantDomain;
     }
 
@@ -235,19 +241,19 @@ public class RestAPIAdminImpl {
         return keyManagerCollectionApi.keyManagersGet();
     }
 
-    public KeyManagerDTO getKeyManager(String uuid) throws ApiException {
+    public ApiResponse<KeyManagerDTO> getKeyManager(String uuid) throws ApiException {
 
-        return keyManagerIndividualApi.keyManagersKeyManagerIdGet(uuid);
+        return keyManagerIndividualApi.keyManagersKeyManagerIdGetWithHttpInfo(uuid);
     }
 
-    public KeyManagerDTO updateKeyManager(String uuid, KeyManagerDTO keyManagerDTO) throws ApiException {
+    public ApiResponse<KeyManagerDTO> updateKeyManager(String uuid, KeyManagerDTO keyManagerDTO) throws ApiException {
 
-        return keyManagerIndividualApi.keyManagersKeyManagerIdPut(uuid, keyManagerDTO);
+        return keyManagerIndividualApi.keyManagersKeyManagerIdPutWithHttpInfo(uuid, keyManagerDTO);
     }
 
-    public void deleteKeyManager(String uuid) throws ApiException {
+    public ApiResponse<Void> deleteKeyManager(String uuid) throws ApiException {
 
-        keyManagerIndividualApi.keyManagersKeyManagerIdDelete(uuid);
+        return keyManagerIndividualApi.keyManagersKeyManagerIdDeleteWithHttpInfo(uuid);
     }
 
     public SettingsDTO getSettings() throws ApiException {
@@ -685,5 +691,41 @@ public class RestAPIAdminImpl {
             return new HttpResponse(gson.toJson(e.getResponseBody()), e.getCode());
         }
         return response;
+    }
+
+    /**
+     * This method is used to retrieve tenant Config.
+     *
+     * @return API response returned by API call.
+     * @throws ApiException if an error occurs while retrieving tenant Config.
+     */
+    public Object getTenantConfig() throws ApiException {
+        return tenantConfigApi.exportTenantConfig();
+    }
+
+    /**
+     * This method is used to update tenant config.
+     *
+     * @param tenantConf Tenant Configuration.
+     * @return API response returned by API call.
+     * @throws ApiException if an error occurs updating the tenant conf.
+     */
+    public Object updateTenantConfig(Object tenantConf) throws ApiException {
+        return tenantConfigApi.updateTenantConfig(tenantConf);
+    }
+
+    /**
+     * This method is used to retrieve tenant Config Schema.
+     *
+     * @return API response returned by API call.
+     * @throws ApiException if an error occurs while retrieving tenant Config schema.
+     */
+    public Object getTenantConfigSchema() throws ApiException {
+        return tenantConfigSchemaApi.exportTenantConfigSchema();
+    }
+
+
+    public WorkflowListDTO getWorkflowsByWorkflowType(String workflowType) throws ApiException {
+        return workflowCollectionApi.workflowsGet(null, null, null, null, workflowType);
     }
 }

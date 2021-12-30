@@ -33,12 +33,17 @@ pathToAxis2PublisherXmlTemplate='../repository/resources/conf/templates/reposito
 pathToTenantAxis2PublisherXmlTemplate='../repository/resources/conf/templates/repository/conf/axis2/tenant-axis2_Publisher.xml.j2'
 pathToAxis2DevportalXmlTemplate='../repository/resources/conf/templates/repository/conf/axis2/axis2_Devportal.xml.j2'
 pathToTenantAxis2DevportalXmlTemplate='../repository/resources/conf/templates/repository/conf/axis2/tenant-axis2_Devportal.xml.j2'
+pathToAxis2ControlPlaneXmlTemplate='../repository/resources/conf/templates/repository/conf/axis2/axis2_ControlPlane.xml.j2'
+pathToTenantAxis2ControlPlaneXmlTemplate='../repository/resources/conf/templates/repository/conf/axis2/tenant-axis2_ControlPlane.xml.j2'
 pathToRegistryTMTemplate='../repository/resources/conf/templates/repository/conf/registry_TM.xml.j2'
 pathToAxis2TXmlTemplateBackup='../repository/resources/conf/templates/repository/conf/axis2/axis2.xml.j2.backup'
 pathToTenantAxis2TXmlTemplateBackup='../repository/resources/conf/templates/repository/conf/axis2/tenant-axis2.xml.j2.backup'
 pathToRegistryTemplateBackup='../repository/resources/conf/templates/repository/conf/registry.backup'
 pathToDeploymentConfigurationBackup='../repository/conf/deployment.toml.backup'
 pathToDeploymentTemplates='../repository/resources/conf/deployment-templates'
+pathToTomcatCarbonWEBINFWebXmlTemplate='../repository/resources/conf/templates/repository/conf/tomcat/carbon/WEB-INF/web.xml.j2'
+pathToTomcatCarbonWEBINFWebXmlTemplateBackup='../repository/resources/conf/templates/repository/conf/tomcat/carbon/WEB-INF/web.xml.j2.backup'
+pathToTomcatCarbonWEBINFWebXmlTMTemplate='../repository/resources/conf/templates/repository/conf/tomcat/carbon/WEB-INF/web_TM_GW.xml.j2'
 timestamp=""
 cd `dirname "$0"`
 
@@ -147,6 +152,18 @@ replaceRegistryXMLTemplateFile(){
 		cp $pathToRegistryTMTemplate $pathToRegistryTemplate
 		timeStamp
 		echo "[${timestamp}] INFO - Renamed the existing $pathToRegistryTMTemplate file as registry.xml.j2"
+	fi
+}
+
+replaceTomcatCarbonWEBINFWebXmlTemplateFile(){
+  if [ -e $pathToTomcatCarbonWEBINFWebXmlTemplate ] && [ -e $pathToTomcatCarbonWEBINFWebXmlTMTemplate ]
+	then
+	  mv $pathToTomcatCarbonWEBINFWebXmlTemplate $pathToTomcatCarbonWEBINFWebXmlTemplateBackup
+		timeStamp
+		echo "[${timestamp}] INFO - Renamed the existing $pathToTomcatCarbonWEBINFWebXmlTemplate file as web.xml.j2.backup"
+		cp $pathToTomcatCarbonWEBINFWebXmlTMTemplate $pathToTomcatCarbonWEBINFWebXmlTemplate
+		timeStamp
+		echo "[${timestamp}] INFO - Renamed the existing $pathToTomcatCarbonWEBINFWebXmlTMTemplate file as web.xml.j2"
 	fi
 }
 
@@ -285,12 +302,30 @@ case $1 in
 		replaceDeploymentConfiguration control-plane $passedSkipConfigOptimizationOption
 		removeWebSocketInboundEndpoint
 		removeSecureWebSocketInboundEndpoint
+		removeSynapseConfigs
+		replaceAxis2TemplateFile $pathToAxis2ControlPlaneXmlTemplate
+		replaceTenantAxis2TemplateFile $pathToTenantAxis2ControlPl  aneXmlTemplate
+		 # removing webbapps which are not required for this profile
+		for i in $(find $pathToWebapps -maxdepth 1 -mindepth 1 \( -name 'api#am#gateway#v2.war' \)); do
+			rm -r $i
+			file=`basename "$i"`
+			timeStamp
+			echo "[${timestamp}] INFO - Removed the $file file from ${pathToWebapps}"
+			folder=`basename $file .war`
+			if [ -d ${pathToWebapps}/$folder ]
+			then
+				rm -r ${pathToWebapps}/$folder
+				timeStamp
+				echo "[${timestamp}] INFO - Removed $folder directory from ${pathToWebapps}"
+			fi
+		done
         ;;
 	-Dprofile=traffic-manager)
 		timeStamp
 		echo "[${timestamp}] INFO - Starting to optimize API Manager for the Traffic Manager profile"
 		replaceAxis2TemplateFile $pathToAxis2TMXmlTemplate
 		replaceRegistryXMLTemplateFile
+		replaceTomcatCarbonWEBINFWebXmlTemplateFile
 		replaceDeploymentConfiguration traffic-manager $passedSkipConfigOptimizationOption
 		removeWebSocketInboundEndpoint
 		removeSecureWebSocketInboundEndpoint
@@ -321,6 +356,7 @@ case $1 in
 		timeStamp
 		echo "[${timestamp}] INFO - Starting to optimize API Manager for the Gateway worker profile"
      	replaceDeploymentConfiguration gateway-worker $2
+		  replaceTomcatCarbonWEBINFWebXmlTemplateFile
 		# removing webbapps which are not required for this profile
 		for i in $(find $pathToWebapps -maxdepth 1 -mindepth 1 -not \( -name 'am#sample#pizzashack#v*.war' -o -name 'api#am#gateway#v2.war' \)); do
 			rm -r $i

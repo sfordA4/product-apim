@@ -68,7 +68,15 @@ public class APIProductDTO {
 public enum StateEnum {
         CREATED("CREATED"),
         
-        PUBLISHED("PUBLISHED");
+        PUBLISHED("PUBLISHED"),
+        
+        DEPRECATED("DEPRECATED"),
+        
+        RETIRED("RETIRED"),
+        
+        BLOCKED("BLOCKED"),
+        
+        PROTOTYPED("PROTOTYPED");
 
 private String value;
 
@@ -110,7 +118,7 @@ public static StateEnum fromValue(String value) {
 
         public static final String SERIALIZED_NAME_STATE = "state";
         @SerializedName(SERIALIZED_NAME_STATE)
-            private StateEnum state;
+            private StateEnum state = StateEnum.CREATED;
 
         public static final String SERIALIZED_NAME_ENABLE_SCHEMA_VALIDATION = "enableSchemaValidation";
         @SerializedName(SERIALIZED_NAME_ENABLE_SCHEMA_VALIDATION)
@@ -408,6 +416,10 @@ public static SubscriptionAvailabilityEnum fromValue(String value) {
         @SerializedName(SERIALIZED_NAME_LAST_UPDATED_TIME)
             private String lastUpdatedTime;
 
+        public static final String SERIALIZED_NAME_GATEWAY_VENDOR = "gatewayVendor";
+        @SerializedName(SERIALIZED_NAME_GATEWAY_VENDOR)
+            private String gatewayVendor;
+
         public static final String SERIALIZED_NAME_APIS = "apis";
         @SerializedName(SERIALIZED_NAME_APIS)
             private List<ProductAPIDTO> apis = null;
@@ -419,6 +431,10 @@ public static SubscriptionAvailabilityEnum fromValue(String value) {
         public static final String SERIALIZED_NAME_CATEGORIES = "categories";
         @SerializedName(SERIALIZED_NAME_CATEGORIES)
             private List<String> categories = null;
+
+        public static final String SERIALIZED_NAME_WORKFLOW_STATUS = "workflowStatus";
+        @SerializedName(SERIALIZED_NAME_WORKFLOW_STATUS)
+            private String workflowStatus;
 
 
         public APIProductDTO id(String id) {
@@ -1179,6 +1195,29 @@ public static SubscriptionAvailabilityEnum fromValue(String value) {
     }
 
 
+        public APIProductDTO gatewayVendor(String gatewayVendor) {
+        
+        this.gatewayVendor = gatewayVendor;
+        return this;
+        }
+
+    /**
+        * Get gatewayVendor
+    * @return gatewayVendor
+    **/
+        @javax.annotation.Nullable
+      @ApiModelProperty(example = "wso2", value = "")
+    
+    public String getGatewayVendor() {
+        return gatewayVendor;
+    }
+
+
+    public void setGatewayVendor(String gatewayVendor) {
+        this.gatewayVendor = gatewayVendor;
+    }
+
+
         public APIProductDTO apis(List<ProductAPIDTO> apis) {
         
         this.apis = apis;
@@ -1248,6 +1287,29 @@ public static SubscriptionAvailabilityEnum fromValue(String value) {
     }
 
 
+        public APIProductDTO workflowStatus(String workflowStatus) {
+        
+        this.workflowStatus = workflowStatus;
+        return this;
+        }
+
+    /**
+        * Get workflowStatus
+    * @return workflowStatus
+    **/
+        @javax.annotation.Nullable
+      @ApiModelProperty(example = "APPROVED", value = "")
+    
+    public String getWorkflowStatus() {
+        return workflowStatus;
+    }
+
+
+    public void setWorkflowStatus(String workflowStatus) {
+        this.workflowStatus = workflowStatus;
+    }
+
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -1290,14 +1352,16 @@ public static SubscriptionAvailabilityEnum fromValue(String value) {
             Objects.equals(this.corsConfiguration, apIProduct.corsConfiguration) &&
             Objects.equals(this.createdTime, apIProduct.createdTime) &&
             Objects.equals(this.lastUpdatedTime, apIProduct.lastUpdatedTime) &&
+            Objects.equals(this.gatewayVendor, apIProduct.gatewayVendor) &&
             Objects.equals(this.apis, apIProduct.apis) &&
             Objects.equals(this.scopes, apIProduct.scopes) &&
-            Objects.equals(this.categories, apIProduct.categories);
+            Objects.equals(this.categories, apIProduct.categories) &&
+            Objects.equals(this.workflowStatus, apIProduct.workflowStatus);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, context, description, provider, hasThumbnail, state, enableSchemaValidation, isRevision, revisionedApiProductId, revisionId, responseCachingEnabled, cacheTimeout, visibility, visibleRoles, visibleTenants, accessControl, accessControlRoles, apiType, transport, tags, policies, apiThrottlingPolicy, authorizationHeader, securityScheme, subscriptionAvailability, subscriptionAvailableTenants, additionalProperties, monetization, businessInformation, corsConfiguration, createdTime, lastUpdatedTime, apis, scopes, categories);
+        return Objects.hash(id, name, context, description, provider, hasThumbnail, state, enableSchemaValidation, isRevision, revisionedApiProductId, revisionId, responseCachingEnabled, cacheTimeout, visibility, visibleRoles, visibleTenants, accessControl, accessControlRoles, apiType, transport, tags, policies, apiThrottlingPolicy, authorizationHeader, securityScheme, subscriptionAvailability, subscriptionAvailableTenants, additionalProperties, monetization, businessInformation, corsConfiguration, createdTime, lastUpdatedTime, gatewayVendor, apis, scopes, categories, workflowStatus);
     }
 
 
@@ -1338,9 +1402,11 @@ sb.append("class APIProductDTO {\n");
     sb.append("    corsConfiguration: ").append(toIndentedString(corsConfiguration)).append("\n");
     sb.append("    createdTime: ").append(toIndentedString(createdTime)).append("\n");
     sb.append("    lastUpdatedTime: ").append(toIndentedString(lastUpdatedTime)).append("\n");
+    sb.append("    gatewayVendor: ").append(toIndentedString(gatewayVendor)).append("\n");
     sb.append("    apis: ").append(toIndentedString(apis)).append("\n");
     sb.append("    scopes: ").append(toIndentedString(scopes)).append("\n");
     sb.append("    categories: ").append(toIndentedString(categories)).append("\n");
+    sb.append("    workflowStatus: ").append(toIndentedString(workflowStatus)).append("\n");
 sb.append("}");
 return sb.toString();
 }

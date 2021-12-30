@@ -21,7 +21,10 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpStatus;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.testng.Assert;
+import org.wso2.am.integration.clients.gateway.api.v2.dto.APIInfoDTO;
 import org.wso2.am.integration.clients.publisher.api.ApiClient;
 import org.wso2.am.integration.clients.publisher.api.ApiException;
 import org.wso2.am.integration.clients.publisher.api.ApiResponse;
@@ -29,8 +32,10 @@ import org.wso2.am.integration.clients.publisher.api.v1.ApIsApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ApiAuditApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ApiDocumentsApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ApiLifecycleApi;
+import org.wso2.am.integration.clients.publisher.api.v1.ApiProductLifecycleApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ApiProductRevisionsApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ApiProductsApi;
+import org.wso2.am.integration.clients.publisher.api.v1.ApiResourcePoliciesApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ApiRevisionsApi;
 import org.wso2.am.integration.clients.publisher.api.v1.ClientCertificatesApi;
 import org.wso2.am.integration.clients.publisher.api.v1.CommentsApi;
@@ -57,6 +62,7 @@ import org.wso2.am.integration.clients.publisher.api.v1.dto.APIRevisionDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.APIRevisionDeploymentDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.APIRevisionListDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.ApiEndpointValidationResponseDTO;
+import org.wso2.am.integration.clients.publisher.api.v1.dto.AsyncAPISpecificationValidationResponseDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.AuditReportDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.CertMetadataDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.CertificatesDTO;
@@ -76,12 +82,15 @@ import org.wso2.am.integration.clients.publisher.api.v1.dto.MockResponsePayloadL
 import org.wso2.am.integration.clients.publisher.api.v1.dto.OpenAPIDefinitionValidationResponseDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.PatchRequestBodyDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.PostRequestBodyDTO;
+import org.wso2.am.integration.clients.publisher.api.v1.dto.ResourcePolicyInfoDTO;
+import org.wso2.am.integration.clients.publisher.api.v1.dto.ResourcePolicyListDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.ScopeDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.ScopeListDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.SearchResultListDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.SubscriptionListDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.SubscriptionPolicyListDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.ThrottlingPolicyListDTO;
+import org.wso2.am.integration.clients.publisher.api.v1.dto.WSDLValidationResponseDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.WorkflowResponseDTO;
 import org.wso2.am.integration.test.ClientAuthenticator;
 import org.wso2.am.integration.test.Constants;
@@ -95,11 +104,15 @@ import org.wso2.carbon.automation.test.utils.http.client.HttpResponse;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+
+import static org.wso2.am.integration.clients.publisher.api.v1.dto.APIDTO.SubscriptionAvailabilityEnum.ALL_TENANTS;
 
 /**
  * This util class performs the actions related to APIDTOobjects.
@@ -117,6 +130,7 @@ public class RestAPIPublisherImpl {
     public ApIsApi apIsApi = new ApIsApi();
     public ApiDocumentsApi apiDocumentsApi = new ApiDocumentsApi();
     public ApiRevisionsApi apiRevisionsApi = new ApiRevisionsApi();
+    public ApiResourcePoliciesApi apiResourcePoliciesApi = new ApiResourcePoliciesApi();
     public ApiProductRevisionsApi apiProductRevisionsApi = new ApiProductRevisionsApi();
     public ThrottlingPoliciesApi throttlingPoliciesApi = new ThrottlingPoliciesApi();
     public ClientCertificatesApi clientCertificatesApi = new ClientCertificatesApi();
@@ -133,9 +147,13 @@ public class RestAPIPublisherImpl {
     public UnifiedSearchApi unifiedSearchApi = new UnifiedSearchApi();
     public GlobalMediationPoliciesApi globalMediationPoliciesApi = new GlobalMediationPoliciesApi();
     public ScopesApi sharedScopesApi = new ScopesApi();
+    public ApiProductLifecycleApi productLifecycleApi = new ApiProductLifecycleApi();
     public ApiClient apiPublisherClient = new ApiClient();
     public String tenantDomain;
+    public String accessToken;
     private ApiProductsApi apiProductsApi = new ApiProductsApi();
+    private RestAPIGatewayImpl restAPIGateway;
+    private String disableVerification = System.getProperty("disableVerification");
 
     @Deprecated
     public RestAPIPublisherImpl() {
@@ -147,7 +165,7 @@ public class RestAPIPublisherImpl {
         // token/DCR of Publisher node itself will be used
         String tokenURL = publisherURL + "oauth2/token";
         String dcrURL = publisherURL + "client-registration/v0.17/register";
-        String accessToken = ClientAuthenticator
+        accessToken = ClientAuthenticator
                 .getAccessToken("openid apim:api_view apim:api_create apim:api_delete apim:api_publish " +
                                 "apim:subscription_view apim:subscription_block apim:external_services_discover " +
                                 "apim:threat_protection_policy_create apim:threat_protection_policy_manage " +
@@ -169,6 +187,7 @@ public class RestAPIPublisherImpl {
         apIsApi.setApiClient(apiPublisherClient);
         apiProductsApi.setApiClient(apiPublisherClient);
         apiRevisionsApi.setApiClient(apiPublisherClient);
+        apiResourcePoliciesApi.setApiClient(apiPublisherClient);
         apiProductRevisionsApi.setApiClient(apiPublisherClient);
         graphQlSchemaApi.setApiClient(apiPublisherClient);
         commentsApi.setApiClient(apiPublisherClient);
@@ -186,7 +205,19 @@ public class RestAPIPublisherImpl {
         sharedScopesApi.setApiClient(apiPublisherClient);
         globalMediationPoliciesApi.setApiClient(apiPublisherClient);
         endpointCertificatesApi.setApiClient(apiPublisherClient);
+        productLifecycleApi.setApiClient(apiPublisherClient);
         this.tenantDomain = tenantDomain;
+        this.restAPIGateway = new RestAPIGatewayImpl(this.username, this.password, tenantDomain);
+    }
+
+    public String getAccessToken() {
+
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+
+        this.accessToken = accessToken;
     }
 
     /**
@@ -235,6 +266,14 @@ public class RestAPIPublisherImpl {
             }
         } else {
             body.setVisibility(APIDTO.VisibilityEnum.PUBLIC);
+        }
+        if (apiRequest.getSubscriptionAvailability() == null) {
+            body.setSubscriptionAvailability(APIDTO.SubscriptionAvailabilityEnum.CURRENT_TENANT);
+        } else {
+            body.setSubscriptionAvailability(APIDTO.SubscriptionAvailabilityEnum.fromValue(apiRequest.getSubscriptionAvailability()));
+        }
+        if (apiRequest.getVisibleTenants() != null) {
+            body.setVisibleTenants(apiRequest.getVisibleTenants());
         }
 
         if (apiRequest.getAccessControl() != null) {
@@ -891,6 +930,17 @@ public class RestAPIPublisherImpl {
     }
 
     /***
+     * Remove a shared scope
+     *
+     * @param id id of the scope to delete
+     * @throws ApiException
+     */
+    public void removeSharedScope(String id) throws ApiException {
+        ApiResponse<Void> httpInfo = sharedScopesApi.deleteSharedScopeWithHttpInfo(id);
+        Assert.assertEquals(httpInfo.getStatusCode(), HttpStatus.SC_OK);
+    }
+
+    /***
      * Update a shared scopes
      *
      * @param uuid
@@ -1122,14 +1172,60 @@ public class RestAPIPublisherImpl {
         Assert.assertEquals(HttpStatus.SC_OK, schemaDefinitionDTO.getStatusCode());
     }
 
-    public APIDTO importWSDLSchemaDefinition(File file,String url, String properties,String type) throws ApiException {
-        ApiResponse<APIDTO> apiDtoApiResponse = apIsApi.importWSDLDefinitionWithHttpInfo( file,url,
-                properties, type);
+    public WSDLValidationResponseDTO validateWsdlDefinition(String url, File wsdlDefinition) throws ApiException {
+        ApiResponse<WSDLValidationResponseDTO> response = validationApi
+                .validateWSDLDefinitionWithHttpInfo(url, wsdlDefinition);
+        Assert.assertEquals(HttpStatus.SC_OK, response.getStatusCode());
+        return response.getData();
+    }
+
+    public APIDTO importWSDLSchemaDefinition(File file, String url, String properties, String type)
+            throws ApiException {
+        ApiResponse<APIDTO> apiDtoApiResponse = apIsApi.importWSDLDefinitionWithHttpInfo(file, url, properties, type);
         Assert.assertEquals(HttpStatus.SC_CREATED, apiDtoApiResponse.getStatusCode());
         return apiDtoApiResponse.getData();
     }
 
     public ApiResponse<Void> getWSDLSchemaDefinitionOfAPI(String apiId) throws ApiException {
+        ApiResponse<Void> apiDtoApiResponse = apIsApi.getWSDLOfAPIWithHttpInfo(apiId,null);
+        Assert.assertEquals(HttpStatus.SC_OK, apiDtoApiResponse.getStatusCode());
+        return apiDtoApiResponse;
+    }
+
+    public ResourcePolicyListDTO getApiResourcePolicies(String apiId, String sequenceType, String resourcePath,
+            String verb) throws ApiException {
+        ApiResponse<ResourcePolicyListDTO> policyListDTOApiResponse = apiResourcePoliciesApi
+                .getAPIResourcePoliciesWithHttpInfo(apiId, sequenceType, resourcePath, verb, null);
+        Assert.assertEquals(policyListDTOApiResponse.getStatusCode(), HttpStatus.SC_OK);
+        return policyListDTOApiResponse.getData();
+    }
+
+    public ResourcePolicyInfoDTO updateApiResourcePolicies(String apiId, String resourcePolicyId, String resourcePath,
+            ResourcePolicyInfoDTO resourcePolicyInfoDTO, String verb) throws ApiException {
+
+        ApiResponse<ResourcePolicyInfoDTO> response = apiResourcePoliciesApi
+                .updateAPIResourcePoliciesByPolicyIdWithHttpInfo(apiId, resourcePolicyId, resourcePolicyInfoDTO, null);
+        Assert.assertEquals(response.getStatusCode(), HttpStatus.SC_OK);
+        return response.getData();
+    }
+
+
+    public AsyncAPISpecificationValidationResponseDTO validateAsyncAPISchemaDefinition(String url, File file)
+            throws ApiException {
+        ApiResponse<AsyncAPISpecificationValidationResponseDTO> response = validationApi
+                .validateAsyncAPISpecificationWithHttpInfo(false, url, file);
+        Assert.assertEquals(HttpStatus.SC_OK, response.getStatusCode());
+        return response.getData();
+    }
+
+    public APIDTO importAsyncAPISchemaDefinition(File file, String url, String properties)
+            throws ApiException {
+        ApiResponse<APIDTO> apiDtoApiResponse = apIsApi.importAsyncAPISpecificationWithHttpInfo(file, url, properties);
+        Assert.assertEquals(HttpStatus.SC_CREATED, apiDtoApiResponse.getStatusCode());
+        return apiDtoApiResponse.getData();
+    }
+
+    public ApiResponse<Void> getAsyncAPIDefinitionOfAPI(String apiId) throws ApiException {
         ApiResponse<Void> apiDtoApiResponse = apIsApi.getWSDLOfAPIWithHttpInfo(apiId,null);
         Assert.assertEquals(HttpStatus.SC_OK, apiDtoApiResponse.getStatusCode());
         return apiDtoApiResponse;
@@ -1175,24 +1271,33 @@ public class RestAPIPublisherImpl {
         body.setCorsConfiguration(new APICorsConfigurationDTO());
         body.setTags(Arrays.asList(apiCreationRequestBean.getTags().split(",")));
 
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("endpoint_type", "http");
-        JSONObject sandUrl = new JSONObject();
-        sandUrl.put("url", apiCreationRequestBean.getEndpointUrl().toString());
-        jsonObject.put("sandbox_endpoints", sandUrl);
-        jsonObject.put("production_endpoints", sandUrl);
-        if ("basic".equalsIgnoreCase(apiCreationRequestBean.getEndpointType())) {
-            JSONObject endpointSecurityGlobal = new JSONObject();
-            endpointSecurityGlobal.put("enabled", true);
-            endpointSecurityGlobal.put("type", "basic");
-            endpointSecurityGlobal.put("username", apiCreationRequestBean.getEpUsername());
-            endpointSecurityGlobal.put("password", apiCreationRequestBean.getEpPassword());
-            JSONObject endpointSecurity = new JSONObject();
-            endpointSecurity.put("production", endpointSecurityGlobal);
-            endpointSecurity.put("sandbox", endpointSecurityGlobal);
-            jsonObject.put("endpoint_security", endpointSecurity);
+        if (apiCreationRequestBean.getSetEndpointSecurityDirectlyToEndpoint()) {
+            try {
+                body.setEndpointConfig(new JSONParser().parse(apiCreationRequestBean.getEndpoint().toString()));
+            } catch (ParseException e) {
+                throw new ApiException(e);
+            }
+        } else {
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("endpoint_type", "http");
+            JSONObject sandUrl = new JSONObject();
+            sandUrl.put("url", apiCreationRequestBean.getEndpointUrl().toString());
+            jsonObject.put("sandbox_endpoints", sandUrl);
+            jsonObject.put("production_endpoints", sandUrl);
+            if ("basic".equalsIgnoreCase(apiCreationRequestBean.getEndpointType())) {
+                JSONObject endpointSecurityGlobal = new JSONObject();
+                endpointSecurityGlobal.put("enabled", true);
+                endpointSecurityGlobal.put("type", "basic");
+                endpointSecurityGlobal.put("username", apiCreationRequestBean.getEpUsername());
+                endpointSecurityGlobal.put("password", apiCreationRequestBean.getEpPassword());
+                JSONObject endpointSecurity = new JSONObject();
+                endpointSecurity.put("production", endpointSecurityGlobal);
+                endpointSecurity.put("sandbox", endpointSecurityGlobal);
+                jsonObject.put("endpoint_security", endpointSecurity);
+            }
+            body.setEndpointConfig(jsonObject);
         }
-        body.setEndpointConfig(jsonObject);
+
         List<String> tierList = new ArrayList<>();
         tierList.add(Constants.TIERS_UNLIMITED);
         if (apiCreationRequestBean.getSubPolicyCollection() != null) {
@@ -1457,10 +1562,9 @@ public class RestAPIPublisherImpl {
      * @throws ApiException throws of an error occurred when creating the API Revision.
      */
     public HttpResponse deployAPIRevision(String apiUUID, String revisionUUID,
-                                          List<APIRevisionDeployUndeployRequest> apiRevisionDeployRequestList)
-            throws ApiException {
-
-        setActivityID();
+                                          List<APIRevisionDeployUndeployRequest> apiRevisionDeployRequestList,
+                                          String apiType)
+    throws ApiException, APIManagerIntegrationTestException {
         Gson gson = new Gson();
         List<APIRevisionDeploymentDTO> apiRevisionDeploymentDTOList = new ArrayList<>();
         List<APIRevisionDeploymentDTO> apiRevisionDeploymentDTOResponseList = new ArrayList<>();
@@ -1475,6 +1579,8 @@ public class RestAPIPublisherImpl {
             ApiResponse<List<APIRevisionDeploymentDTO>> httpInfo =
                     apiRevisionsApi.deployAPIRevisionWithHttpInfo(apiUUID, revisionUUID, apiRevisionDeploymentDTOList);
             Assert.assertEquals(201, httpInfo.getStatusCode());
+
+            waitForDeployAPI(apiUUID, revisionUUID, apiType);
             //apiRevisionDeploymentDTOResponseList = httpInfo.getData();
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
@@ -1495,14 +1601,17 @@ public class RestAPIPublisherImpl {
     /**
      * This method is used to deploy API Revision to Gateways.
      *
-     * @param apiRevisionDeployRequestList API Revision deploy object body
+     * @param apiUUID UUID of API
+     * @param revisionUUID UUID of API Revision
+     * @param apiRevisionDeployRequest API Revision deploy object body
+     * @param apiType API Type
      * @return HttpResponse
      * @throws ApiException throws of an error occurred when creating the API Revision.
+     * @throws APIManagerIntegrationTestException
      */
     public HttpResponse deployAPIRevision(String apiUUID, String revisionUUID,
-                                          APIRevisionDeployUndeployRequest apiRevisionDeployRequest)
-            throws ApiException {
-
+                                          APIRevisionDeployUndeployRequest apiRevisionDeployRequest, String apiType)
+    throws ApiException, APIManagerIntegrationTestException {
         Gson gson = new Gson();
         List<APIRevisionDeploymentDTO> apiRevisionDeploymentDTOList = new ArrayList<>();
         List<APIRevisionDeploymentDTO> apiRevisionDeploymentDTOResponseList = new ArrayList<>();
@@ -1515,6 +1624,7 @@ public class RestAPIPublisherImpl {
             ApiResponse<List<APIRevisionDeploymentDTO>> httpInfo =
                     apiRevisionsApi.deployAPIRevisionWithHttpInfo(apiUUID, revisionUUID, apiRevisionDeploymentDTOList);
             Assert.assertEquals(201, httpInfo.getStatusCode());
+            waitForDeployAPI(apiUUID,revisionUUID, apiType);
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
                 return null;
@@ -1528,6 +1638,84 @@ public class RestAPIPublisherImpl {
         return response;
     }
 
+    private void waitForDeployAPI(String apiUUID, String revisionUUID, String apiType) throws ApiException,
+            APIManagerIntegrationTestException {
+        if (Boolean.parseBoolean(disableVerification)){
+            return;
+        }
+        String context, version, provider, name, apiPolicy;
+        if ("APIProduct".equals(apiType)) {
+            APIProductDTO apiProduct = getApiProduct(revisionUUID);
+            context = apiProduct.getContext();
+            version = "1.0.0";
+            provider = apiProduct.getProvider();
+            name = apiProduct.getName();
+            apiPolicy = apiProduct.getApiThrottlingPolicy();
+        } else {
+            APIDTO api = getAPIByID(revisionUUID);
+            context = api.getContext();
+            version = api.getVersion();
+            provider = api.getProvider();
+            name = api.getName();
+            apiPolicy = api.getApiThrottlingPolicy();
+        }
+        APIInfoDTO apiInfo = restAPIGateway.getAPIInfo(apiUUID);
+        if (apiInfo != null) {
+            if (!"APIProduct".equals(apiType)) {
+                if (context.startsWith("/{version}")) {
+                    Assert.assertEquals(apiInfo.getContext(), context.replace("{version}", version));
+                } else {
+                    Assert.assertEquals(apiInfo.getContext(), context.concat("/").concat(version));
+                }
+            } else {
+                Assert.assertEquals(apiInfo.getContext(), context);
+
+            }
+            Assert.assertEquals(apiInfo.getName(), name);
+            Assert.assertEquals(apiInfo.getProvider(), provider);
+            if (!StringUtils.equals(apiPolicy, apiInfo.getPolicy())) {
+                int retries = 0;
+                while (retries <= 5) {
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException ignored) {
+                    }
+                    apiInfo = restAPIGateway.getAPIInfo(apiUUID);
+                    if (!StringUtils.equals(apiPolicy, apiInfo.getPolicy())) {
+                        retries++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            return;
+        }
+        int retries = 0;
+        while (retries <= 20) {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+            }
+            apiInfo = restAPIGateway.getAPIInfo(apiUUID);
+            if (apiInfo != null) {
+                if (!"APIProduct".equals(apiType)) {
+                    if (context.startsWith("/{version}")) {
+                        Assert.assertEquals(apiInfo.getContext(), context.replace("{version}", version));
+                    } else {
+                        Assert.assertEquals(apiInfo.getContext(), context.concat("/").concat(version));
+                    }
+                } else {
+                    Assert.assertEquals(apiInfo.getContext(), context);
+
+                }
+                Assert.assertEquals(apiInfo.getName(), name);
+                Assert.assertEquals(apiInfo.getProvider(), provider);
+                break;
+            }
+            retries++;
+        }
+    }
+
     /**
      * This method is used to undeploy API Revision to Gateways.
      *
@@ -1539,8 +1727,7 @@ public class RestAPIPublisherImpl {
      */
     public HttpResponse undeployAPIRevision(String apiUUID, String revisionUUID,
                                             List<APIRevisionDeployUndeployRequest> apiRevisionUndeployRequestList)
-            throws ApiException {
-
+            throws ApiException, APIManagerIntegrationTestException {
         Gson gson = new Gson();
         List<APIRevisionDeploymentDTO> apiRevisionUnDeploymentDTOList = new ArrayList<>();
         List<APIRevisionDeploymentDTO> apiRevisionUnDeploymentDTOResponseList = new ArrayList<>();
@@ -1555,6 +1742,7 @@ public class RestAPIPublisherImpl {
             ApiResponse<Void> httpInfo = apiRevisionsApi.undeployAPIRevisionWithHttpInfo(apiUUID, revisionUUID, null,
                     false, apiRevisionUnDeploymentDTOList);
             Assert.assertEquals(201, httpInfo.getStatusCode());
+            waitForUnDeployAPI(apiUUID);
             //apiRevisionUnDeploymentDTOResponseList = httpInfo.getData();
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
@@ -1567,6 +1755,29 @@ public class RestAPIPublisherImpl {
         HttpResponse response = null;
         response = new HttpResponse(gson.toJson(apiRevisionUnDeploymentDTOResponseList), 201);
         return response;
+    }
+
+    private void waitForUnDeployAPI(String apiUUID) throws APIManagerIntegrationTestException {
+
+        if (Boolean.parseBoolean(disableVerification)) {
+            return;
+        }
+        APIInfoDTO apiInfo = restAPIGateway.getAPIInfo(apiUUID);
+        if (apiInfo == null) {
+            return;
+        }
+        int retries = 0;
+        while (retries <= 20) {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ignored) {
+            }
+            apiInfo = restAPIGateway.getAPIInfo(apiUUID);
+            if (apiInfo == null) {
+                break;
+            }
+            retries++;
+        }
     }
 
     /**
@@ -1588,6 +1799,8 @@ public class RestAPIPublisherImpl {
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
                 return null;
+            } else if (e.getCode() != 0) {
+                return new HttpResponse(null, e.getCode());
             }
             throw new ApiException(e);
         }
@@ -1617,6 +1830,8 @@ public class RestAPIPublisherImpl {
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
                 return null;
+            } else if (e.getCode() != 0) {
+                return new HttpResponse(null, e.getCode());
             }
             throw new ApiException(e);
         }
@@ -1694,9 +1909,9 @@ public class RestAPIPublisherImpl {
      * @throws ApiException throws of an error occurred when creating the API Revision.
      */
     public HttpResponse deployAPIProductRevision(String apiUUID, String revisionUUID,
-                                                 List<APIRevisionDeployUndeployRequest> apiRevisionDeployRequestList)
-            throws ApiException {
-
+                                          List<APIRevisionDeployUndeployRequest> apiRevisionDeployRequestList,
+                                                 String apiType)
+            throws ApiException, APIManagerIntegrationTestException {
         Gson gson = new Gson();
         List<APIRevisionDeploymentDTO> apiRevisionDeploymentDTOList = new ArrayList<>();
         List<APIRevisionDeploymentDTO> apiRevisionDeploymentDTOResponseList = new ArrayList<>();
@@ -1711,6 +1926,7 @@ public class RestAPIPublisherImpl {
             ApiResponse<Void> httpInfo = apiProductRevisionsApi.deployAPIProductRevisionWithHttpInfo(
                     apiUUID, revisionUUID, apiRevisionDeploymentDTOList);
             Assert.assertEquals(201, httpInfo.getStatusCode());
+            waitForDeployAPI(apiUUID, revisionUUID, apiType);
             //apiRevisionDeploymentDTOResponseList = httpInfo.getData();
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
@@ -1736,9 +1952,8 @@ public class RestAPIPublisherImpl {
      * @throws ApiException throws of an error occurred when undeploying the API Revision.
      */
     public HttpResponse undeployAPIProductRevision(String apiUUID, String revisionUUID,
-                                                   List<APIRevisionDeployUndeployRequest> apiRevisionUndeployRequestList)
-            throws ApiException {
-
+                                            List<APIRevisionDeployUndeployRequest> apiRevisionUndeployRequestList)
+            throws ApiException, APIManagerIntegrationTestException {
         Gson gson = new Gson();
         List<APIRevisionDeploymentDTO> apiRevisionUnDeploymentDTOList = new ArrayList<>();
         List<APIRevisionDeploymentDTO> apiRevisionUnDeploymentDTOResponseList = new ArrayList<>();
@@ -1753,6 +1968,7 @@ public class RestAPIPublisherImpl {
             ApiResponse<Void> httpInfo = apiProductRevisionsApi.undeployAPIProductRevisionWithHttpInfo(
                     apiUUID, revisionUUID, null, false, apiRevisionUnDeploymentDTOList);
             Assert.assertEquals(201, httpInfo.getStatusCode());
+            waitForUnDeployAPI(apiUUID);
             //apiRevisionUnDeploymentDTOResponseList = httpInfo.getData();
         } catch (ApiException e) {
             if (e.getResponseBody().contains("already exists")) {
@@ -2016,6 +2232,54 @@ public class RestAPIPublisherImpl {
 
         return endpointCertificatesApi.deleteEndpointCertificateByAliasWithHttpInfo(alias);
 
+    }
+
+    /**
+     * Change the lifecycle status of API Product
+     *
+     * @param apiProductId       UUID of api product
+     * @param action             Lifecycle state change action
+     * @param lifecycleChecklist Lifecycle check list
+     * @return WorkflowResponseDTO object
+     * @throws ApiException If error when changing the lifecycle state of api product
+     */
+    public WorkflowResponseDTO changeAPIProductLifeCycleStatus(String apiProductId, String action, String lifecycleChecklist)
+            throws ApiException {
+
+        setActivityID();
+        return this.productLifecycleApi
+                .changeAPIProductLifecycle(action, apiProductId, lifecycleChecklist, null);
+    }
+
+    /**
+     * Get lifecycle state information of an API Product
+     *
+     * @param apiProductId UUID of API Product
+     * @return  Http Response object
+     * @throws ApiException If error when retrieving the lifecycle state information of an api product
+     */
+    public HttpResponse getLifecycleStatusOfApiProduct(String apiProductId) throws ApiException {
+
+        LifecycleStateDTO lifecycleStateDTO = this.productLifecycleApi.getAPIProductLifecycleState(apiProductId, null);
+        HttpResponse response = null;
+        if (StringUtils.isNotEmpty(lifecycleStateDTO.getState())) {
+            response = new HttpResponse(lifecycleStateDTO.getState(), 200);
+        }
+        return response;
+    }
+
+    /**
+     * Get lifecycle state change history of an API Product
+     * @param apiProductId  UUID of API Product
+     * @return LifecycleHistoryDTO object
+     * @throws ApiException If error when retrieving the lifecycle state change history of API Product
+     */
+    public LifecycleHistoryDTO getLifecycleHistoryOfApiProduct(String apiProductId) throws ApiException {
+
+        ApiResponse<LifecycleHistoryDTO> apiResponse =
+                this.productLifecycleApi.getAPIProductLifecycleHistoryWithHttpInfo(apiProductId, null);
+        Assert.assertEquals(apiResponse.getStatusCode(), HttpStatus.SC_OK);
+        return apiResponse.getData();
     }
 
     private void setActivityID() {

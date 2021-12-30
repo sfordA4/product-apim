@@ -21,6 +21,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpStatus;
 import org.testng.Assert;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Factory;
@@ -29,6 +30,7 @@ import org.wso2.am.integration.clients.admin.ApiResponse;
 import org.wso2.am.integration.clients.admin.api.dto.CustomAttributeDTO;
 import org.wso2.am.integration.clients.admin.api.dto.RequestCountLimitDTO;
 import org.wso2.am.integration.clients.admin.api.dto.SubscriptionThrottlePolicyDTO;
+import org.wso2.am.integration.clients.admin.api.dto.SubscriptionThrottlePolicyPermissionDTO;
 import org.wso2.am.integration.clients.admin.api.dto.ThrottleLimitDTO;
 import org.wso2.am.integration.clients.publisher.api.v1.dto.APIOperationsDTO;
 import org.wso2.am.integration.clients.store.api.v1.dto.ApplicationDTO;
@@ -93,20 +95,28 @@ public class BurstControlTestCase  extends APIManagerLifecycleBaseTest {
     @BeforeClass(alwaysRun = true)
     public void setEnvironment() throws Exception {
         super.init(userMode);
+        String INTERNAL_EVERYONE= "Internal/everyone";
+        List<String> roleList = new ArrayList<>();
+        SubscriptionThrottlePolicyPermissionDTO permissions;
         // Add subscription policy - 1
         RequestCountLimitDTO requestCountLimit =
                                         DtoFactory.createRequestCountLimitDTO("min", 1, 1000L);
         ThrottleLimitDTO defaultLimit =
                                         DtoFactory.createThrottleLimitDTO(ThrottleLimitDTO.TypeEnum.REQUESTCOUNTLIMIT, requestCountLimit, null);
+        roleList.add(INTERNAL_EVERYONE);
+        permissions = DtoFactory.
+                createSubscriptionThrottlePolicyPermissionDTO(SubscriptionThrottlePolicyPermissionDTO.
+                        PermissionTypeEnum.ALLOW, roleList);
         subscriptionThrottlePolicyDTO1 = DtoFactory.createSubscriptionThrottlePolicyDTO(subscriptionTier5RPMburst,
                                         "subscriptionTier5RPMburst",
                                         "1000 request per min with burst of 5 requests per minute",
                                         false, defaultLimit, 0, 0, burstLimit1,
                                         rateLimitTimeUnit, customAttributes, stopQuotaOnReach, billingPlan,
-                                        subscriberCount);
+                                        subscriberCount, permissions);
         ApiResponse<SubscriptionThrottlePolicyDTO> apiResponse =
                                         restAPIAdmin.addSubscriptionThrottlingPolicy(subscriptionThrottlePolicyDTO1);
         Assert.assertEquals(apiResponse.getStatusCode(), HttpStatus.SC_CREATED);
+        subscriptionThrottlePolicyDTO1 = apiResponse.getData();
 
         // Add subscription policy - 2
         subscriptionThrottlePolicyDTO2 = DtoFactory.createSubscriptionThrottlePolicyDTO(subscriptionTier25RPMburst,
@@ -114,9 +124,10 @@ public class BurstControlTestCase  extends APIManagerLifecycleBaseTest {
                                         "1000 request per min with burst of 25 requests per minute",
                                         false, defaultLimit, 0, 0, burstLimit2,
                                         rateLimitTimeUnit, customAttributes, stopQuotaOnReach, billingPlan,
-                                        subscriberCount);
+                                        subscriberCount, permissions);
         apiResponse = restAPIAdmin.addSubscriptionThrottlingPolicy(subscriptionThrottlePolicyDTO2);
         Assert.assertEquals(apiResponse.getStatusCode(), HttpStatus.SC_CREATED);
+        subscriptionThrottlePolicyDTO2 = apiResponse.getData();
 
         // create api
         backendEP = gatewayUrlsWrk.getWebAppURLNhttp() + "response/";
@@ -181,10 +192,9 @@ public class BurstControlTestCase  extends APIManagerLifecycleBaseTest {
 
         // remove previous subscription
         log.info("Old subscription id:" + subscriptionDTO1.getSubscriptionId());
-        HttpResponse httpResponse = restAPIStore.removeSubscription(subscriptionDTO1.getSubscriptionId());
+        HttpResponse httpResponse = restAPIStore.removeSubscription(subscriptionDTO1);
         log.info("httpResponse of removeSubscription ====== : " + httpResponse);
         log.info("AAA= " + subscriptionDTO1);
-        restAPIStore.waitForSubscriptionRemovedFromGateway(subscriptionDTO1);
         Thread.sleep(5000);
 
         // add new subscription
@@ -225,5 +235,14 @@ public class BurstControlTestCase  extends APIManagerLifecycleBaseTest {
                 }
             }
         }
+    }
+
+    @AfterClass(alwaysRun = true)
+    public void destroy() throws Exception {
+        restAPIStore.deleteApplication(applicationDTO.getApplicationId());
+        restAPIPublisher.deleteAPI(apiId);
+        restAPIAdmin.deleteSubscriptionThrottlingPolicy(subscriptionThrottlePolicyDTO1.getPolicyId());
+        restAPIAdmin.deleteSubscriptionThrottlingPolicy(subscriptionThrottlePolicyDTO2.getPolicyId());
+        super.cleanUp();
     }
 }
